@@ -152,30 +152,10 @@ python -m src.infer \
 - Reporte **IoU/Dice por classe** e médias (mIoU, mDice).
 - Se for vídeo, considere avaliação **temporal** (consistência entre frames).
 
----
-
-## 🧾 Licença
-
-Defina a licença do **código** (ex.: MIT) e a política do **dataset** (o dataset permanece no Kaggle).  
-Exemplo:
-- Código: MIT (neste repositório).
-- Dados: consulte termos do Kaggle/dono original.
 
 ---
 
-## 📣 Citação (opcional)
 
-Se publicar resultados, inclua citação apropriada do dataset e do repositório.
-
----
-
-## 🙏 Agradecimentos
-
-- Comunidade PyTorch e projetos open‑source de segmentação.
-- Profissionais envolvidos nas anotações dos vídeos.
-- Kaggle pela hospedagem do dataset.
-
----
 
 ## 🧰 Dicas de `.gitignore` (opcional)
 
@@ -195,11 +175,3 @@ __pycache__/
 ```
 
 ---
-
-## 🆘 Suporte
-
-Abra uma *Issue* com:
-- versão do Python/torch,
-- comando executado,
-- stack trace completo,
-- descrição do dataset (tamanho, formato das máscaras).
