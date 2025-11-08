@@ -13,6 +13,7 @@ Objetivo: **treinar** o modelo e disponibilizar **script de inferência**.
 - Métricas clássicas (IoU/Dice) e logs de treinamento.
 - Scripts para **download e preparação de dados** (via Kaggle API).
 - Estrutura clara de projeto e reprodutibilidade.
+- Interface Gradio para visualização de resultados
 
 ---
 
