@@ -12,7 +12,8 @@ import cv2
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
-
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
 def resize_img_mask(img: np.ndarray, mask: np.ndarray, size: Tuple[int, int]) -> Tuple[np.ndarray, np.ndarray]:
     h, w = size
@@ -42,24 +43,13 @@ def apply_aug(
 
 
 class SegmentationDataset(Dataset):
-    def __init__(
-        self,
-        img_paths: Sequence[str],
-        mask_paths: Sequence[str],
-        img_size: Tuple[int, int],
-        augment: bool,
-        flip_lr: bool,
-        flip_ud: bool,
-        rot90: bool,
-    ):
+    def __init__(self, img_paths: Sequence[str], mask_paths: Sequence[str], img_size: Tuple[int, int], augment: bool):
         assert len(img_paths) == len(mask_paths)
         self.img_paths = list(img_paths)
         self.mask_paths = list(mask_paths)
         self.img_size = img_size
         self.augment = augment
-        self.flip_lr = flip_lr
-        self.flip_ud = flip_ud
-        self.rot90 = rot90
+        self.tform = get_train_transforms(img_size) if augment else get_val_transforms(img_size)
 
     def __len__(self) -> int:
         return len(self.img_paths)
@@ -69,15 +59,19 @@ class SegmentationDataset(Dataset):
         mask = cv2.imread(self.mask_paths[idx], cv2.IMREAD_GRAYSCALE)
         if img is None or mask is None:
             raise RuntimeError(f"Falha ao carregar par: {self.img_paths[idx]} / {self.mask_paths[idx]}")
+
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img, mask = resize_img_mask(img, mask, self.img_size)
-        if self.augment:
-            img, mask = apply_aug(img, mask, self.flip_lr, self.flip_ud, self.rot90)
-        img = img.astype(np.float32) / 255.0
+
+        # Albumentations expects HWC image + 2D mask
+        aug = self.tform(image=img, mask=mask)
+        img, mask = aug["image"], aug["mask"]
+
+        # to tensor (CHW float32) and long mask
+        img = (img.astype(np.float32) / 255.0).transpose(2, 0, 1)
         mask = mask.astype(np.int64)
-        img = torch.from_numpy(np.transpose(img, (2, 0, 1)))
-        mask = torch.from_numpy(mask)
-        return img, mask
+
+        return torch.from_numpy(img), torch.from_numpy(mask)
+
 
 
 def make_dataloaders(
@@ -105,9 +99,27 @@ def make_dataloaders(
     val_imgs = [img_paths[i] for i in val_idx]
     val_msks = [mask_paths[i] for i in val_idx]
 
-    train_ds = SegmentationDataset(train_imgs, train_msks, img_size, use_aug, flip_lr, flip_ud, rot90)
-    val_ds = SegmentationDataset(val_imgs, val_msks, img_size, False, flip_lr, flip_ud, rot90)
+    train_ds = SegmentationDataset(train_imgs, train_msks, img_size, augment=use_aug)
+    val_ds   = SegmentationDataset(val_imgs,   val_msks,   img_size, augment=False)
 
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
     return train_loader, val_loader
+
+def get_train_transforms(size):
+    h, w = size
+    return A.Compose([
+        A.Resize(h, w, interpolation=cv2.INTER_LINEAR),
+        A.HorizontalFlip(p=0.5),
+        A.VerticalFlip(p=0.0),
+        A.RandomRotate90(p=0.25),
+        A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.1, rotate_limit=10, border_mode=cv2.BORDER_REFLECT_101, p=0.5),
+        A.RandomBrightnessContrast(p=0.3),
+        A.GaussianBlur(blur_limit=(3,5), p=0.2),
+    ])
+
+def get_val_transforms(size):
+    h, w = size
+    return A.Compose([
+        A.Resize(h, w, interpolation=cv2.INTER_LINEAR),
+    ])
