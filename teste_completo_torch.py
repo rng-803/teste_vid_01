@@ -15,6 +15,10 @@ from __future__ import annotations
 import csv
 import torch
 from torch import nn
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+import segmentation_models_pytorch as smp
+from torch.amp import GradScaler
 
 from config import (
     BATCH_SIZE,
@@ -47,7 +51,7 @@ from data_utils import (
 )
 from datasets import make_dataloaders
 from model_unet import UNet
-from training import preview_predictions, train_model
+from training import preview_predictions, train_model, dice_loss
 
 
 def main() -> None:
@@ -90,9 +94,30 @@ def main() -> None:
     )
 
     num_classes = max(COLOR_TO_ID.values()) + 1
-    model = UNet(in_channels=3, num_classes=num_classes, base_filters=64).to(device)
-    criterion = nn.CrossEntropyLoss()
+
+    model = smp.Unet(
+    encoder_name="resnet34",
+    encoder_weights="imagenet",
+    in_channels=3,
+    classes=num_classes,
+).to(device)
+
+    # Optional: add class weights if you want to handle imbalance
+    class_weights = torch.tensor([1.0, 2.0, 0.5], device=device)
+
+    ce = nn.CrossEntropyLoss(weight=class_weights)
+    def criterion(logits, y):
+        return 0.5 * ce(logits, y) + 0.5 * dice_loss(logits, y, num_classes=num_classes)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
+    scaler = GradScaler('cuda', enabled=torch.cuda.is_available())
+
+    history_rows = [("epoch", "split", "loss", "acc", "miou")]
+    best_val_iou = -1.0
+    patience = 10
+    stale = 0
+
 
     history_rows, _ = train_model(
         model=model,
@@ -103,7 +128,6 @@ def main() -> None:
         device=device,
         num_classes=num_classes,
         epochs=EPOCHS,
-        best_model_path=BEST_MODEL_PATH,
     )
 
     with open(TRAIN_LOG, "w", newline="") as f:
@@ -122,3 +146,4 @@ if __name__ == "__main__":
     except Exception as err:  # pragma: no cover
         print("Aviso (CUDNN):", err)
     main()
+
