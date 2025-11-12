@@ -20,7 +20,7 @@ TOLERANCE = 0
 
 IMG_SIZE = (256, 256)    # (H, W)
 BATCH_SIZE = 8
-EPOCHS = 20
+EPOCHS = 2
 LR = 1e-3
 VAL_SPLIT = 0.2
 SEED = 1337
@@ -32,3 +32,4 @@ ROT90 = False
 
 TRAIN_LOG = "training_log_torch.csv"
 BEST_MODEL_PATH = "unet_best_torch.pt"
+
